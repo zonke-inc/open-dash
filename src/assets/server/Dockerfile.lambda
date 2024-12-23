@@ -1,0 +1,14 @@
+FROM public.ecr.aws/lambda/python:3.12-arm64
+
+RUN dnf update
+RUN pip install --upgrade pip
+
+WORKDIR ${LAMBDA_TASK_ROOT}
+
+COPY . .
+RUN pip install --no-cache wheels/*
+
+# The standard Matplotlib config directory is not writable in Lambda, so override it to /tmp.
+ENV MPLCONFIGDIR=/tmp/matplotlib
+
+CMD ["index.handler"]
