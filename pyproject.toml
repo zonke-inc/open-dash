@@ -7,10 +7,10 @@ name = "open-dash"
 dynamic = ["version"]
 description = 'Open Dash packages Plotly dash applications for deployment to AWS Lambda. Developed by Zonké.'
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.8"
 license = "MIT"
 keywords = [
-  "dash", "deployment", "serverless", "zonke"
+  "dash", "deployment", "serverless", "aws", "zonke"
 ]
 authors = [
   { name = "Zonké, Inc.", email = "support@zonke.dev" },
@@ -24,9 +24,11 @@ classifiers = [
   "Intended Audience :: Science/Research",
   "License :: OSI Approved :: MIT License",
   "Programming Language :: Python",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
-  "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: Implementation :: CPython",
   "Programming Language :: Python :: Implementation :: PyPy",
   "Topic :: Software Development :: Build Tools",
@@ -52,6 +54,5 @@ packages = [
 
 [tool.hatch.build.targets.wheel]
 packages = [
-  "src",
-  "assets"
+  "src"
 ]

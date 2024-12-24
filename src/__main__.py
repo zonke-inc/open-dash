@@ -59,3 +59,6 @@ def main():
     bundle.create(args.source, excluded_directories, include_warmer)
 
     print('Bundle complete.')
+
+if __name__ == '__main__':
+  main()

@@ -1,83 +1,130 @@
 #!/usr/bin/env python
 
-from dash import _dash_renderer, Dash, dash_table, dcc, html
+from dash import _dash_renderer, Dash, dash_table, dcc, fingerprint, html
+import importlib
 import os
-from shutil import copy2
+import shutil
 import subprocess
-import tempfile
+import sys
 
+# The create_app function should return a Dash instance.
 from app import create_app
 
 app = create_app()
 
-def relative_package_paths(dependencies: dict, stage: str) -> list[str]:
+
+# Note that the extra space in the path list is intentional to ensure that the path will have a trailing slash.
+dash_sub_package_paths = [
+  os.path.join('dash', 'dcc', ''),
+  os.path.join('dash', 'html', ''),
+  os.path.join('dash', 'dash_table', ''),
+]
+def is_dash_sub_package(dependency: str) -> bool:
+  for path in dash_sub_package_paths:
+    if dependency.startswith(path):
+      return True
+  
+  return False
+
+def add_relative_package_paths(packages: list[tuple[str, list[str]]], dependencies: dict, stage: str) -> None:
   if 'relative_package_path' not in dependencies:
-    return []
+    return
   
   if isinstance(dependencies['relative_package_path'], str):
-    return [f"{dependencies['namespace']}/{dependencies['relative_package_path']}"]
+    namespace = dependencies['namespace']
+    relative_package_path = dependencies['relative_package_path']
+    package = os.path.join(namespace, relative_package_path)
+    if is_dash_sub_package(package):
+      namespace = f"{namespace}.{os.path.split(relative_package_path)[0]}"
+    
+    packages.append((namespace, [package]))
+    return
   
   if stage not in dependencies['relative_package_path']:
-    return []
+    return
   
   paths = []
-  for dependency in dependencies['relative_package_path'][stage]:
-    paths.append(f"{dependencies['namespace']}/{dependency}")
-  
-  return paths
+  namespace = dependencies['namespace']
+  for relative_package_path in dependencies['relative_package_path'][stage]:
+    package = os.path.join(namespace, relative_package_path)
+    paths.append(package)
 
-def js_dist_dependencies(app: Dash) -> str:
-  packages = []
+    if is_dash_sub_package(package):
+      namespace = f"{namespace}.{os.path.split(relative_package_path)[0]}"
+  
+  packages.append((namespace, paths))
+
+def namespace_version_lookup(packages: list[tuple[str, list[str]]]) -> dict[str, str]:
+  lookup = {}
+  for namespace, _ in packages:
+    if namespace in lookup:
+      continue
+    
+    lookup[namespace] = importlib.import_module(namespace).__version__
+  
+  return lookup
+
+def js_dist_dependencies(app: Dash) -> list[tuple[str, list[str]]]:
+  packages: list[tuple[str, list[str]]] = []
   for dependencies in _dash_renderer._js_dist_dependencies:
-    packages.extend(relative_package_paths(dependencies, 'prod'))
+    add_relative_package_paths(packages, dependencies, 'prod')
   
   for dependencies in _dash_renderer._js_dist:
-    packages.extend(relative_package_paths(dependencies, 'prod'))
+    add_relative_package_paths(packages, dependencies, 'prod')
   
   for dependencies in dcc._js_dist:
-    packages.extend(relative_package_paths(dependencies, 'prod'))
+    add_relative_package_paths(packages, dependencies, 'prod')
   
   for dependencies in dash_table._js_dist:
-    packages.extend(relative_package_paths(dependencies, 'prod'))
+    add_relative_package_paths(packages, dependencies, 'prod')
   
   for dependencies in html._js_dist:
-    packages.extend(relative_package_paths(dependencies, 'prod'))
+    add_relative_package_paths(packages, dependencies, 'prod')
   
   for dependencies in app.scripts.get_all_scripts():
-    packages.extend(relative_package_paths(dependencies, 'prod'))
+    add_relative_package_paths(packages, dependencies, 'prod')
 
   return packages
 
 if __name__ == '__main__':
-  tmp_site_packages = os.path.join(tempfile.gettempdir(), 'dash-bundling', 'site-packages')
-  try:
-    dependency_paths = js_dist_dependencies(app)
+  dependency_packages = js_dist_dependencies(app)
+  print('Installing Python dependencies...')
 
-    os.makedirs(tmp_site_packages, exist_ok=True)
-    wheels_path = os.environ['OPEN_DASH_WHEELS_PATH']
+  requirements_path = os.environ['OPEN_DASH_REQUIREMENTS_PATH']
+  result = subprocess.run(
+    ['pip', 'install', '--no-cache', '-r', requirements_path],
+    text=True,
+    env=os.environ,
+    capture_output=True,
+  )
+  print(result.stdout)
+  if result.stderr:
+    raise ValueError(result.stderr)
 
-    subprocess.run(
-      ['pip', 'install', '--no-cache', f'{wheels_path}/*', '-t', '.'],
-      cwd=tmp_site_packages,
-      stdout=subprocess.PIPE,
-      stderr=subprocess.STDOUT,
-    )
+  namespace_versions = namespace_version_lookup(dependency_packages)
 
-    assets_path = os.environ['OPEN_DASH_ASSETS_PATH']
-    for dependency_path in dependency_paths:
-      source = os.path.join(tmp_site_packages, dependency_path)
+  assets_path = os.environ['OPEN_DASH_ASSETS_PATH']
+  for namespace, dependencies in dependency_packages:
+    namespace_prefix = os.path.join(*f'{namespace}.'.split('.'))
+    namespace_path = os.path.dirname(sys.modules[namespace].__file__)
+    for dependency_path in dependencies:
+      source = os.path.join(namespace_path, dependency_path.replace(namespace_prefix, ''))
       if not os.path.exists(source):
+        print(f'Warning: Dependency {source} not found, skipping...')
         continue
 
-      target = os.path.dirname(os.path.join(assets_path, dependency_path))
-      os.makedirs(target, exist_ok=True)
-      copy2(source, target)
-    
-    # Capture index.html and write it to assets directory to optionally make it the CloudFront default object.
-    index_html = app.index()
-    with open(os.path.join(assets_path, 'index.html'), 'w') as f:
-      f.write(index_html)
-    
-  finally:
-    if os.path.exists(tmp_site_packages):
-      os.rmdir(tmp_site_packages)
+      target_path = os.path.dirname(os.path.join(assets_path, dependency_path))
+      os.makedirs(target_path, exist_ok=True)
+      
+      fingerprinted = fingerprint.build_fingerprint(
+        os.path.basename(dependency_path),
+        namespace_versions[namespace],
+        int(os.stat(source).st_mtime)
+      )
+      shutil.copy2(source, os.path.join(target_path, fingerprinted))
+  
+  # Capture index.html and write it to assets directory to optionally make it the CloudFront default object.
+  # The fingerprinted assets should match the index.html references.
+  index_html = app.index()
+  with open(os.path.join(assets_path, 'index.html'), 'w') as f:
+    f.write(index_html)

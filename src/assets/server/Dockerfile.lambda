@@ -6,7 +6,7 @@ RUN pip install --upgrade pip
 WORKDIR ${LAMBDA_TASK_ROOT}
 
 COPY . .
-RUN pip install --no-cache wheels/*
+RUN pip install -r requirements.txt
 
 # The standard Matplotlib config directory is not writable in Lambda, so override it to /tmp.
 ENV MPLCONFIGDIR=/tmp/matplotlib
