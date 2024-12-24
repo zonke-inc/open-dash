@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.8"
 license = "MIT"
 keywords = [
-  "dash", "deployment", "serverless", "aws", "zonke"
+  "dash", "deployment", "serverless", "zonke"
 ]
 authors = [
   { name = "Zonké, Inc.", email = "support@zonke.dev" },

@@ -45,7 +45,7 @@ open-dash bundle --source '/path/to/app/folder' --include-warmer=true --exclude-
 ```
 
 ## Suggested Architecture (Not Included in OpenDash)
-![Suggested AWS Architecture](assets/suggested-deployment-architecture.png)
+![Suggested AWS Architecture](https://raw.githubusercontent.com/zonke-inc/open-dash/refs/heads/main/assets/suggested-deployment-architecture.png)
 
 1. **CloudFront** - Serves static assets from the S3 bucket and falls back to the Dash server lambda for other requests. Remember to set the default root object to `index.html`.
 2. **S3 Bucket** - Stores the static assets. Make sure to block public access and give CloudFront read access to the bucket. See this [AWS Guide](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-restricting-access-to-s3.html) for more information.
