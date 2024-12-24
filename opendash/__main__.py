@@ -1,14 +1,14 @@
 #!python
 
 import argparse
+from opendash import bundle
 from os import path
-import bundle
 
 
 parser = argparse.ArgumentParser(description='Bundles Dash assets for deployment on AWS.')
 subparsers = parser.add_subparsers(dest='command', required=True)
 
-bundle_parser = subparsers.add_parser('bundle', help='Bundle of Dash assets for deployment.')
+bundle_parser = subparsers.add_parser('bundle', help='Bundle Dash assets for deployment.')
 bundle_parser.add_argument(
   '--source',
   '-s',

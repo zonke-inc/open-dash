@@ -84,10 +84,19 @@ def create(source_path: str, excluded_directories: list[str], include_warmer: bo
     ['aws-wsgi>=0.2.7'],
   )
 
+  print('Installing app dependencies...')
+  result = subprocess.run(
+    ['pip', 'install', '--no-cache', '-r', os.path.join(paths['server_functions_path'], 'requirements.txt')],
+    text=True,
+    env=os.environ,
+    capture_output=True,
+  )
+  print(result.stdout)
+  print(result.stderr)
+
   print('Bundling React assets...')
   assets_bundler_path = os.path.join(paths['server_functions_path'], 'assets-bundler.py')
   os.environ['OPEN_DASH_ASSETS_PATH'] = paths['assets_path']
-  os.environ['OPEN_DASH_REQUIREMENTS_PATH'] = os.path.join(paths['server_functions_path'], 'requirements.txt')
   result = subprocess.run(
     ['python3', assets_bundler_path],
     text=True,

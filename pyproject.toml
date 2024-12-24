@@ -42,17 +42,17 @@ Issues = "https://github.com/zonke-inc/open-dash/issues"
 Source = "https://github.com/zonke-inc/open-dash"
 
 [project.scripts]
-open-dash = "__main__:main"
+open-dash = "opendash.__main__:main"
 
 [tool.hatch.version]
-path = "src/__about__.py"
+path = "opendash/__about__.py"
 
 [tool.hatch.build.targets.sdist]
 packages = [
-  "src"
+  "opendash"
 ]
 
 [tool.hatch.build.targets.wheel]
 packages = [
-  "src"
+  "opendash"
 ]

@@ -88,18 +88,6 @@ def js_dist_dependencies(app: Dash) -> list[tuple[str, list[str]]]:
 
 if __name__ == '__main__':
   dependency_packages = js_dist_dependencies(app)
-  print('Installing Python dependencies...')
-
-  requirements_path = os.environ['OPEN_DASH_REQUIREMENTS_PATH']
-  result = subprocess.run(
-    ['pip', 'install', '--no-cache', '-r', requirements_path],
-    text=True,
-    env=os.environ,
-    capture_output=True,
-  )
-  print(result.stdout)
-  if result.stderr:
-    raise ValueError(result.stderr)
 
   namespace_versions = namespace_version_lookup(dependency_packages)
 
