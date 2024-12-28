@@ -29,20 +29,64 @@ if __name__ == "__main__" and os.getenv('DEBUG') == 'True':
     create_app().run_server(debug=True, port=os.getenv('PORT', 8050))
 ```
 
+### Configuring OpenDash
+Create an `open-dash.config.json` file in the root of your project. The configuration file should contain the following fields:
+
+```json
+{
+    "warmer": true, // Optional - Whether to include a warmer function in the output bundle.
+    "index-html": true, // Optional - Whether to include an index.html file in the output bundle.
+    "venv-path": "path/to/venv", // Optional - The path to the virtual environment. If not provided, the system Python interpreter is used.
+    "excluded-directories": ["__pycache__", ".git"], // Optional - Directories to exclude from the output bundle.
+    "source-path": "path/to/source", // Optional - The path to the source directory. If not provided, the current working directory is used.
+    "fingerprint": {
+      "version": true, // Whether to include the system package version in the fingerprint.
+      "method": "last-modified" // The method to use for fingerprinting. Options: "none", "global", "last-modified"
+    }
+}
+```
+
+If you do not provide a configuration file, OpenDash will use the default configuration:
+
+```json
+{
+    "warmer": true,
+    "source-path": ".",
+    "index-html": false,
+    "excluded-directories": [],
+    "fingerprint": {
+      "version": true,
+      "method": "last-modified"
+    }
+}
+```
+
+
 ### Generating Artifacts
 Run the following commands to generate the artifacts.
 
 ```bash
 python -m pip install open-dash
 
-# Run the next command in virtual environment because open-dash installs your application's dependencies.
-#   The --source flag is required and should point to the folder containing your app.py file.
-#   The --include-warmer flag is optional and will include the warmer function in the output.
-#   The --exclude-dirs flag is optional and will exclude the specified sub-directories from the output.
-open-dash bundle --source '/path/to/app/folder' --include-warmer=true --exclude-dirs='__pycache__,.git'
+# NOTE: Run the next command in virtual environment because open-dash installs your application's dependencies.
+#   --config-path -> Path to the configuration file. If not provided, the fallback will be an open-dash.config.json file in the current directory, or a default configuration if neither is found.
+open-dash bundle --config-path path/to/open-dash.config.json
 
 # The output .open-dash folder will be a sibling of the source folder.
 ```
+
+## File Fingerprinting
+Dash fingerprints JS and CSS files to help with cache invalidation. The fingerprint is generated based on each file's 
+last modified time. This fingerprint approach works if assets are fetched from the same server. However, if you deploy
+your assets to S3 and your server to Lambda, the fingerprint will be different for each. To solve this issue, OpenDash
+uses a hybrid fingerprinting approach:
+1. **Last Modified Time** - The last modified time is used to generate the fingerprint if the index.html file is 
+generated at the same time as the static assets. In this case assets and index.html are generated at the same time 
+and will have the same fingerprint.
+2. **Global Fingerprint** - The fingerprint is generated based on the build time of the assets. This is ideal if you
+are going to serve assets from S3, the index.html from Lambda, and override the fingerprints returned by the index.html.
+The Dash server internally ignores the fingerprint and returns the latest file, but it is not ideal for a serverless 
+architecture because there can be thousands of different fingerprints for the same file.
 
 ## Suggested Architecture (Not Included in OpenDash)
 ![Suggested AWS Architecture](https://raw.githubusercontent.com/zonke-inc/open-dash/refs/heads/main/assets/suggested-deployment-architecture.png)

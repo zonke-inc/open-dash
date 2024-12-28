@@ -1,6 +1,9 @@
 import os
 import shutil
 import subprocess
+import sys
+
+from opendash.config import Config
 
 
 def copy_directory_contents(source: str, target: str, exclude: list[str]) -> None:
@@ -57,20 +60,20 @@ def prepare_folders(source_path: str, include_warmer: bool) -> dict[str, str]:
   }
 
 
-def create(source_path: str, excluded_directories: list[str], include_warmer: bool) -> None:
-  print(f'Preparing dash bundle from {source_path}...')
+def create(config: Config) -> None:
+  print(f'Preparing dash bundle from {config.source_path}...')
 
-  paths = prepare_folders(source_path, include_warmer)
+  paths = prepare_folders(config.source_path, config.include_warmer)
   if not paths:
     return
   
   # Decostruct the prepare_folders_result dictionary
-  if include_warmer:
+  if config.include_warmer:
     os.makedirs(paths['warmer_function_path'], exist_ok=True)
     copy_directory_contents(os.path.join(paths['script_path'], 'assets', 'warmer'), paths['warmer_function_path'], [])
 
   # Copy source directory contents into server-functions/default directory, excluding excluded_directories.
-  copy_directory_contents(source_path, paths['server_functions_path'], excluded_directories)
+  copy_directory_contents(config.source_path, paths['server_functions_path'], config.excluded_directories)
   shutil.copy2(os.path.join(paths['script_path'], 'assets', 'assets-bundler.py'), paths['server_functions_path'])
   shutil.copy2(os.path.join(paths['script_path'], 'assets', 'server', 'index.py'), paths['server_functions_path'])
   shutil.copy2(
@@ -85,8 +88,15 @@ def create(source_path: str, excluded_directories: list[str], include_warmer: bo
   )
 
   print('Installing app dependencies...')
+  pip_path = 'pip3'
+  python_path = 'python3'
+  if config.virtualenv_path:
+    pip_path = os.path.join(config.virtualenv_path, 'bin', 'pip3')
+    python_path = os.path.join(config.virtualenv_path, 'bin', 'python3')
+
+  requirements_path = os.path.join(paths['server_functions_path'], 'requirements.txt')
   result = subprocess.run(
-    ['pip', 'install', '--no-cache', '-r', os.path.join(paths['server_functions_path'], 'requirements.txt')],
+    [pip_path, '--disable-pip-version-check', 'install', '--no-cache', '-r', requirements_path],
     text=True,
     env=os.environ,
     capture_output=True,
@@ -97,8 +107,11 @@ def create(source_path: str, excluded_directories: list[str], include_warmer: bo
   print('Bundling React assets...')
   assets_bundler_path = os.path.join(paths['server_functions_path'], 'assets-bundler.py')
   os.environ['OPEN_DASH_ASSETS_PATH'] = paths['assets_path']
+  os.environ['OPEN_DASH_FINGERPRINT_METHOD'] = config.fingerprint.method.value
+  os.environ['OPEN_DASH_INCLUDE_INDEX_HTML'] = '1' if config.include_index_html else '0'
+  os.environ['OPEN_DASH_INCLUDE_FINGERPRINT_VERSION'] = '1' if config.fingerprint.include_version else '0'
   result = subprocess.run(
-    ['python3', assets_bundler_path],
+    [python_path, assets_bundler_path],
     text=True,
     env=os.environ,
     capture_output=True,
@@ -107,13 +120,13 @@ def create(source_path: str, excluded_directories: list[str], include_warmer: bo
   print(result.stdout)
   if result.stderr:
     print(result.stderr)
-    return
+    sys.exit(1)
 
-  if os.path.exists(os.path.join(source_path, 'assets')):
+  if os.path.exists(os.path.join(config.source_path, 'assets')):
     # Copy contents of assets directory into .open-dash/assets directory. Note that the server functions directory
     # has a copy of the assets directory as well, if it exists, to ensure that the assets are available to the
     # fallback server function.
-    copy_directory_contents(os.path.join(source_path, 'assets'), paths['assets_path'], [])
+    copy_directory_contents(os.path.join(config.source_path, 'assets'), paths['assets_path'], [])
   
   print('Cleaning up...')
   os.remove(assets_bundler_path)

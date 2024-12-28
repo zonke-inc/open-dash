@@ -3,6 +3,9 @@
 import argparse
 from opendash import bundle
 from os import path
+import sys
+
+from opendash.config import Config
 
 
 parser = argparse.ArgumentParser(description='Bundles Dash assets for deployment on AWS.')
@@ -10,55 +13,32 @@ subparsers = parser.add_subparsers(dest='command', required=True)
 
 bundle_parser = subparsers.add_parser('bundle', help='Bundle Dash assets for deployment.')
 bundle_parser.add_argument(
-  '--source',
-  '-s',
-  type=str,
-  required=True,
-  help='The path to the source directory containing the Dash application.'
-)
-bundle_parser.add_argument(
-  '--exclude-dirs',
-  '-e',
+  '--config-path',
+  '-c',
   type=str,
   required=False,
-  help='Comma-separated list of directories to exclude from the target bundle. Directories should be immediate children of the source directory.'
-)
-bundle_parser.add_argument(
-  '--include-warmer',
-  '-w',
-  type=bool,
-  required=False,
-  help='Whether to include a lambda warmer function in the bundle.'
+  help='Path to the open-dash.config.json configuration file.'
 )
 
 def main():
   args = parser.parse_args()
 
   if args.command == 'bundle':
-    if not args.source:
-      print('Error: --source/-s argument is required.')
-      return
+    config = Config.from_path(args.config_path)
 
-    if not path.exists(args.source):
-      print(f'Error: Source directory {args.source} does not exist.')
-      return
+    if not path.exists(path.join(config.source_path, 'app.py')):
+      print(f'Error: Source directory {config.source_path} does not contain an app.py file.')
+      sys.exit(1)
 
-    if not path.exists(path.join(args.source, 'app.py')):
-      print(f'Error: Source directory {args.source} does not contain an app.py file.')
-      return
-
-    if not path.exists(path.join(args.source, 'requirements.txt')):
-      print(f'Error: Source directory {args.source} does not contain a requirements.txt file.')
-      return
-
-    excluded_directories = []
-    if args.exclude_dirs:
-      excluded_directories = args.exclude_dirs.split(',')
+    if not path.exists(path.join(config.source_path, 'requirements.txt')):
+      print(f'Error: Source directory {config.source_path} does not contain a requirements.txt file.')
+      sys.exit(1)
     
-    include_warmer = args.include_warmer if args.include_warmer else False
-    bundle.create(args.source, excluded_directories, include_warmer)
+    bundle.create(config)
 
     print('Bundle complete.')
+  
+  sys.exit(0)
 
 if __name__ == '__main__':
   main()

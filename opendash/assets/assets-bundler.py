@@ -4,14 +4,16 @@ from dash import _dash_renderer, Dash, dash_table, dcc, fingerprint, html
 import importlib
 import os
 import shutil
-import subprocess
 import sys
+import time
 
 # The create_app function should return a Dash instance.
 from app import create_app
 
 app = create_app()
 
+
+global_fingerprint = int(time.time())
 
 # Note that the extra space in the path list is intentional to ensure that the path will have a trailing slash.
 dash_sub_package_paths = [
@@ -64,34 +66,62 @@ def namespace_version_lookup(packages: list[tuple[str, list[str]]]) -> dict[str,
   
   return lookup
 
-def js_dist_dependencies(app: Dash) -> list[tuple[str, list[str]]]:
+def internal_dependencies(app: Dash) -> list[tuple[str, list[str]]]:
+  dependency_groups = [
+    _dash_renderer._js_dist_dependencies,
+    _dash_renderer._js_dist,
+    dcc._js_dist,
+    dash_table._js_dist,
+    html._js_dist,
+    app.scripts.get_all_scripts(),
+    app.css.get_all_css()
+  ]
+
   packages: list[tuple[str, list[str]]] = []
-  for dependencies in _dash_renderer._js_dist_dependencies:
-    add_relative_package_paths(packages, dependencies, 'prod')
-  
-  for dependencies in _dash_renderer._js_dist:
-    add_relative_package_paths(packages, dependencies, 'prod')
-  
-  for dependencies in dcc._js_dist:
-    add_relative_package_paths(packages, dependencies, 'prod')
-  
-  for dependencies in dash_table._js_dist:
-    add_relative_package_paths(packages, dependencies, 'prod')
-  
-  for dependencies in html._js_dist:
-    add_relative_package_paths(packages, dependencies, 'prod')
-  
-  for dependencies in app.scripts.get_all_scripts():
-    add_relative_package_paths(packages, dependencies, 'prod')
+  for group in dependency_groups:
+    for dependencies in group:
+      add_relative_package_paths(packages, dependencies, 'prod')
 
   return packages
 
-if __name__ == '__main__':
-  dependency_packages = js_dist_dependencies(app)
+def asset_file_name(namespace_versions: dict[str, str], namespace: str, dependency_path: str) -> str:
+  timestamp = None
+  if os.environ['OPEN_DASH_FINGERPRINT_METHOD'] == 'global':
+    timestamp = global_fingerprint
+  elif os.environ['OPEN_DASH_FINGERPRINT_METHOD'] == 'last-modified':
+    timestamp = int(time.time())
+  
+  version = namespace_versions[namespace] if os.environ['OPEN_DASH_INCLUDE_FINGERPRINT_VERSION'] == '1' else None
 
+  if timestamp and version:
+    return fingerprint.build_fingerprint(
+      os.path.basename(dependency_path),
+      version,
+      timestamp,
+    )
+  
+  filename, extension = dependency_path.split("/")[-1].split(".", 1)
+  if timestamp:
+    # Note that the version is still included in the filename to ensure that the filename matches the expected format: 
+    #   <filename>.v<version>.m<timestamp>.<extension>
+    # Dash does not use the version or timestamp in the filename, it just validates that the filename matches the
+    # expected format and returns the filename without a fingerprint.
+    return f"{filename}.v0.m{timestamp}.{extension}"
+  
+  if version:
+    # Note that the timestamp is still included in the filename to ensure that the filename matches the expected format:
+    #   <filename>.v<version>.m<timestamp>.<extension>
+    # Dash does not use the version or timestamp in the filename, it just validates that the filename matches the
+    # expected format and returns the filename without a fingerprint.
+    return f"{filename}.v{version}.m0.{extension}"
+  
+  return os.path.basename(dependency_path)
+
+if __name__ == '__main__':
+  assets_path = os.environ['OPEN_DASH_ASSETS_PATH']
+  dependency_packages = internal_dependencies(app)
   namespace_versions = namespace_version_lookup(dependency_packages)
 
-  assets_path = os.environ['OPEN_DASH_ASSETS_PATH']
   for namespace, dependencies in dependency_packages:
     namespace_prefix = os.path.join(*f'{namespace}.'.split('.'))
     namespace_path = os.path.dirname(sys.modules[namespace].__file__)
@@ -101,18 +131,19 @@ if __name__ == '__main__':
         print(f'Warning: Dependency {source} not found, skipping...')
         continue
 
-      target_path = os.path.dirname(os.path.join(assets_path, dependency_path))
-      os.makedirs(target_path, exist_ok=True)
-      
-      fingerprinted = fingerprint.build_fingerprint(
-        os.path.basename(dependency_path),
-        namespace_versions[namespace],
-        int(os.stat(source).st_mtime)
-      )
-      shutil.copy2(source, os.path.join(target_path, fingerprinted))
+      target_directory = os.path.dirname(os.path.join(assets_path, dependency_path))
+      os.makedirs(target_directory, exist_ok=True)
+
+      filename = asset_file_name(namespace_versions, namespace, dependency_path)
+      shutil.copy2(source, os.path.join(target_directory, filename))
   
-  # Capture index.html and write it to assets directory to optionally make it the CloudFront default object.
-  # The fingerprinted assets should match the index.html references.
-  index_html = app.index()
-  with open(os.path.join(assets_path, 'index.html'), 'w') as f:
-    f.write(index_html)
+  if os.environ['OPEN_DASH_INCLUDE_INDEX_HTML'] == '1':
+    # Capture index.html and write it to assets directory to optionally make it the CloudFront default object.
+    # Note that the default fingerprint for all assets matches the index.html references.
+    index_html = app.index()
+    with open(os.path.join(assets_path, 'index.html'), 'w') as f:
+      f.write(index_html)
+  
+  if os.environ['OPEN_DASH_FINGERPRINT_METHOD'] == 'global':
+    with open(os.path.join(assets_path, 'FINGERPRINT_ID'), 'w') as f:
+      f.write(str(global_fingerprint))
