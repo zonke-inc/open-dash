@@ -2,13 +2,13 @@
 OpenDash prepares a [Plotly Dash](https://github.com/plotly/dash) application into artifacts that can be deployed to AWS. A Dash application is a Flask application that uses Plotly.js and React.js to create interactive web visualizations. OpenDash's core functionality extracts static assets from Dash's internal Flask server and prepares them for deployment to S3.
 
 ## Features
-OpenDash produces 3 main artifacts. The output folder structure is a mirror of OpenNext's folder structure. The main artifacts are:
-1. `.open-dash/assets` - A static artifact that can be deployed to an S3 bucket. Assets include an `index.html` file that can be used as the CloudFront default root object. All assets are fingerprinted for cache invalidation.
+The output folder structure is similar to OpenNext's folder structure. The main artifacts are:
+1. `.open-dash/static` - A static artifact that can be deployed to an S3 bucket. Assets include an `index.html` file that can be used as the CloudFront default root object. Assets are fingerprinted for cache invalidation.
 2. `.open-dash/server-functions/default` - A Lambda artifact that contains the Dash application, an index.py file, and a Dockerfile. This is a fallback server in case your Dash application is not a SPA. Most usecases will not trigger the deployed lambda function.
 3. `.open-dash/warmer-function` - Contains a handler that can be used to ping the Dash server lambda to keep it warm.
+4. `.open-dash/data` - Contains the data directory from the source code. This directory can be used to store data files that are used by the Dash application (see [Data Triggered Deployments](https://docs.zonke.dev/architectures/dash/static#data-triggered-deployments)).
 
 ## Getting Started
-
 ### Preparing Your Dash Application
 Define a `create_app` function in `app.py` that returns a Dash app instance.
 
@@ -35,13 +35,14 @@ Create an `open-dash.config.json` file in the root of your project. The configur
 ```json
 {
     "warmer": true, // Optional - Whether to include a warmer function in the output bundle.
-    "index-html": true, // Optional - Whether to include an index.html file in the output bundle.
+    "export-static": true, // Optional - Whether to include an index.html and other static files in the output bundle.
+    "data-path": "path/to/data", // Optional - The path to the data directory.
     "venv-path": "path/to/venv", // Optional - The path to the virtual environment. If not provided, the system Python interpreter is used.
     "excluded-directories": ["__pycache__", ".git"], // Optional - Directories to exclude from the output bundle.
     "source-path": "path/to/source", // Optional - The path to the source directory. If not provided, the current working directory is used.
     "fingerprint": {
-      "version": true, // Whether to include the system package version in the fingerprint.
-      "method": "last-modified" // The method to use for fingerprinting. Options: "none", "global", "last-modified"
+        "version": true, // Whether to include the system package version in the fingerprint.
+        "method": "last-modified" // The method to use for fingerprinting. Options: "none", "global", "last-modified"
     }
 }
 ```
@@ -52,11 +53,11 @@ If you do not provide a configuration file, OpenDash will use the default config
 {
     "warmer": true,
     "source-path": ".",
-    "index-html": false,
+    "export-static": false,
     "excluded-directories": [],
     "fingerprint": {
-      "version": true,
-      "method": "last-modified"
+        "version": true,
+        "method": "last-modified"
     }
 }
 ```
@@ -78,15 +79,12 @@ open-dash bundle --config-path path/to/open-dash.config.json
 ## File Fingerprinting
 Dash fingerprints JS and CSS files to help with cache invalidation. The fingerprint is generated based on each file's 
 last modified time. This fingerprint approach works if assets are fetched from the same server. However, if you deploy
-your assets to S3 and your server to Lambda, the fingerprint will be different for each. To solve this issue, OpenDash
-uses a hybrid fingerprinting approach:
+your assets to S3 and your server to Lambda, the fingerprint will be different for each. To give devs flexibility, 
+OpenDash supports multiple fingerprinting approaches:
 1. **Last Modified Time** - The last modified time is used to generate the fingerprint if the index.html file is 
-generated at the same time as the static assets. In this case assets and index.html are generated at the same time 
-and will have the same fingerprint.
+generated at the same time as the static assets. This is the default fingerprinting method used by Dash.
 2. **Global Fingerprint** - The fingerprint is generated based on the build time of the assets. This is ideal if you
-are going to serve assets from S3, the index.html from Lambda, and override the fingerprints returned by the index.html.
-The Dash server internally ignores the fingerprint and returns the latest file, but it is not ideal for a serverless 
-architecture because there can be thousands of different fingerprints for the same file.
+are going to serve assets from S3, the index page from Lambda, and override the fingerprints returned by the index.html.
 
 ## Suggested Architecture (Not Included in OpenDash)
 ![Suggested AWS Architecture](https://raw.githubusercontent.com/zonke-inc/open-dash/refs/heads/main/assets/suggested-deployment-architecture.png)
@@ -98,7 +96,7 @@ Optional infrastructure, depending on your application:
 
 3. **Lambda@Edge Origin Request Function** - A Lambda function triggered by CloudFront to sign the Dash server lambda requests and configure headers.
 4. **Dash Server Lambda** - A Lambda function that runs the Dash server. This function is triggered by CloudFront when the requested path does not match a static asset. Make sure you define the `DOMAIN_NAME` environment variable. 
-  
+
     > NOTE: It is possible for the server lambda to not get called if your application is a SPA without a backend. Monitor your function's logs and adjust your architecture accordingly.
 
 5. **Warmer Function** - A Lambda function that pings the Dash server lambda to keep it warm. This function is triggered by the EventBridge CRON.

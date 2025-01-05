@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from enum import Enum
 import json
 import os
-import sys
 from typing import Optional, Self
 
 
@@ -31,6 +30,11 @@ class Config:
   The path to the application source directory. If not provided, the current working directory is used.
   """
   source_path: str
+
+  """
+  The application's domain name. This is used to set the domain name in meta tags in the generated index.html file.
+  """
+  domain_name: str
   
   """
   Whether to include a warmer function in the output bundle.
@@ -43,14 +47,22 @@ class Config:
   fingerprint: FingerPrint
   
   """
-  Whether to include an index.html file in the output bundle.
+  Whether to export an index.html file and other static files in the output bundle.
+
+  NOTE: This has partial support for multi-page applications. It does not support paths with query strings or path 
+        variables. Those should be served by the lambda function that has full server functionality.
   """
-  include_index_html: bool
+  export_static: bool
   
   """
   Directories to exclude from the output bundle.
   """
   excluded_directories: list[str]
+
+  """
+  Optional - The path to the data directory.
+  """
+  data_path: Optional[str]
 
   """
   Optional - The path to the virtual environment directory. If not provided, the system Python interpreter is used.
@@ -61,8 +73,10 @@ class Config:
   Creates a Config instance from an open-dash.config.json file. open-dash.config.json file structure:
   {
     "warmer": true,
-    "index-html": true,
+    "export-static": true,
     "venv-path": "path/to/venv",
+    "data-path": "path/to/data",
+    "domain-name": "example.com",
     "source-path": "path/to/source",
     "exclude": ["dir1", "dir2"],
     "fingerprint": {
@@ -94,20 +108,25 @@ class Config:
 
         return Config(
           fingerprint=fingerprint,
+          data_path=data.get('data-path'),
           virtualenv_path=data.get('venv-path'),
-          exclude_warmer=data.get('warmer', True),
+          include_warmer=data.get('warmer', True),
           excluded_directories=data.get('exclude', []),
-          include_index_html=data.get('index-html', False),
+          export_static=data.get('export-static', True),
+          domain_name=data.get('domain-name', 'localhost'),
           source_path=os.path.abspath(data.get('source-path', os.getcwd()))
         )
     
     print(f'OpenDash config not found at {path}. Using system defaults.')
     
     return Config(
-      exclude=[],
-      include_warmer=False,
+      data_path=None,
+      export_static=True,
+      include_warmer=True,
+      virtualenv_path=None,
+      excluded_directories=[],
+      domain_name='localhost',
       source_path=os.getcwd(),
-      include_index_html=False,
       fingerprint=FingerPrint(
         include_version=True,
         method=FingerPrintType.LAST_MODIFIED
