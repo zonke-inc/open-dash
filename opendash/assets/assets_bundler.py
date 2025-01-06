@@ -239,23 +239,31 @@ def export_static_pages(app: Dash, static_path: str) -> S3Origin:
         mimetypes[target_path] = 'application/json'
   
       if page_registry:
+        has_custom_404 = False
         target_directory = os.path.join(static_path, '_dash-update-component')
         copy_source_prefix = os.path.join(copy_source_prefix, '_dash-update-component')
         copy_target_prefix = os.path.join(copy_target_prefix, '_dash-update-component')
         os.makedirs(target_directory, exist_ok=True)
         for page in page_registry.values():
+          if page.get('relative_path').endswith('/404'):
+            has_custom_404 = True
+          
           if page.get('path_template'):
             print(f"Skipping page '{page.get('name')}' with path variables", page.get('path_template'))
             continue
 
-          if page.get('path') == '/':
-            # Skip the index page since it was already exported.
-            continue
-          
+          page_path = page.get('path')
+          if page.get('path') != '/' and page.get('path').startswith('/'):
+            page_path = page.get('path').replace('/', '', 1)
+          elif page_path == '/':
+              # NOTE: This index page is different from the index.html page in a multi-page application. In a multi-page
+              #       application, most (if not all) pages will be fetched as JSON content using the 
+              #       _dash-update-component route and rendered by the client.
+              page_path = 'index'
+
           params = update_components_params.copy()
           # Note that the value of the pathname input is the relative path of the page which includes the base url.
           params['inputs'][0]['value'] = page.get('relative_path')
-          page_path = page.get('path').replace('/', '', 1) if page.get('path').startswith('/') else page.get('path')
           status_code = cache_request(
             client,
             f'{url_base}_dash-update-component',
@@ -269,6 +277,21 @@ def export_static_pages(app: Dash, static_path: str) -> S3Origin:
               target=os.path.join(copy_target_prefix, page_path),
             ))
             mimetypes[os.path.join(copy_target_prefix, page_path)] = 'application/json'
+        
+        if not has_custom_404:
+          status_code = cache_request(
+            client,
+            f'{url_base}_dash-update-component',
+            os.path.join(target_directory, '404'),
+            RequestMethod.POST,
+            update_components_params,
+          )
+          if status_code == 200:
+            s3Copy.append(S3OriginCopy(
+              source=os.path.join(copy_source_prefix, '404'),
+              target=os.path.join(copy_target_prefix, '404'),
+            ))
+            mimetypes[os.path.join(copy_target_prefix, '404')] = 'application/json'
   
   return S3Origin(
     copy=s3Copy,
@@ -325,7 +348,7 @@ if __name__ == '__main__':
     if origins['s3'].find_copy(target_prefix='_dash-update-component/'):
       behaviors.append(CloudFrontBehavior(
         origin='s3',
-        pattern=os.path.join(origin_path_prefix, '_dash-update-component/*') if origin_path_prefix else '_dash-update-component/*',
+        pattern=os.path.join(origin_path_prefix, '_dash-update-component') if origin_path_prefix else '_dash-update-component',
       ))
     
     behaviors.append(CloudFrontBehavior(

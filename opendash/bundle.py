@@ -127,6 +127,9 @@ def create(config: Config) -> None:
   if config.data_path:
     os.environ['OPEN_DASH_DATA_PATH'] = paths['data_path']
   
+  if os.path.exists(os.path.join(config.source_path, 'assets')):
+    os.environ['OPEN_DASH_ASSETS_PATH'] = os.path.join(config.source_path, 'assets')
+  
   result = subprocess.run(
     [python_path, assets_bundler_path],
     text=True,
