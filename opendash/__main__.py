@@ -2,7 +2,7 @@
 
 import argparse
 from opendash import bundle
-from os import path
+import os
 import sys
 
 from opendash.config import Config
@@ -20,21 +20,34 @@ bundle_parser.add_argument(
   help='Path to the open-dash.config.json configuration file.'
 )
 
+def clean_env_vars() -> None:
+  env_vars = []
+  for key in os.environ:
+    if key.startswith('OPEN_DASH_'):
+      env_vars.append(key)
+  
+  for key in env_vars:
+    del os.environ[key]
+
+
 def main():
   args = parser.parse_args()
 
   if args.command == 'bundle':
     config = Config.from_path(args.config_path)
 
-    if not path.exists(path.join(config.source_path, 'app.py')):
+    if not os.path.exists(os.path.join(config.source_path, 'app.py')):
       print(f'Error: Source directory {config.source_path} does not contain an app.py file.')
       sys.exit(1)
 
-    if not path.exists(path.join(config.source_path, 'requirements.txt')):
+    if not os.path.exists(os.path.join(config.source_path, 'requirements.txt')):
       print(f'Error: Source directory {config.source_path} does not contain a requirements.txt file.')
       sys.exit(1)
     
-    bundle.create(config)
+    try:
+      bundle.create(config)
+    finally:
+      clean_env_vars()
 
     print('Bundle complete.')
   

@@ -68,6 +68,11 @@ class Config:
   Optional - The path to the virtual environment directory. If not provided, the system Python interpreter is used.
   """
   virtualenv_path: Optional[str]
+
+  """
+  Optional - The base path to the output directory. If not provided, the source's parent directory is used.
+  """
+  target_base_path: Optional[str]
   
   """
   Creates a Config instance from an open-dash.config.json file. open-dash.config.json file structure:
@@ -78,6 +83,7 @@ class Config:
     "data-path": "path/to/data",
     "domain-name": "example.com",
     "source-path": "path/to/source",
+    "target-base-path": "path/to/output",
     "exclude": ["dir1", "dir2"],
     "fingerprint": {
       "version": true,
@@ -106,15 +112,17 @@ class Config:
             method=FingerPrintType.LAST_MODIFIED
           )
 
+        source_path=os.path.abspath(data.get('source-path', os.getcwd()))
         return Config(
           fingerprint=fingerprint,
+          source_path=source_path,
           data_path=data.get('data-path'),
           virtualenv_path=data.get('venv-path'),
           include_warmer=data.get('warmer', True),
           excluded_directories=data.get('exclude', []),
           export_static=data.get('export-static', True),
           domain_name=data.get('domain-name', 'localhost'),
-          source_path=os.path.abspath(data.get('source-path', os.getcwd()))
+          target_base_path=data.get('target-base-path', os.path.abspath(os.path.join(source_path, os.pardir)))
         )
     
     print(f'OpenDash config not found at {path}. Using system defaults.')
@@ -127,6 +135,7 @@ class Config:
       excluded_directories=[],
       domain_name='localhost',
       source_path=os.getcwd(),
+      target_base_path=os.path.abspath(os.path.join(os.getcwd(), os.pardir)),
       fingerprint=FingerPrint(
         include_version=True,
         method=FingerPrintType.LAST_MODIFIED

@@ -1,0 +1,17 @@
+{
+  "includesDataPath": false,
+  "s3BehaviorPatterns": [
+    "assets/*",
+    "_dash-layout",
+    "_dash-dependencies",
+    "_dash-component-suites/*"
+  ],
+  "defaultBehaviorPatterns": [
+    "*"
+  ],
+  "defaultRootObject": "index.html",
+  "mimetypes": {
+    "_dash-layout": "application/json",
+    "_dash-dependencies": "application/json"
+  }
+}

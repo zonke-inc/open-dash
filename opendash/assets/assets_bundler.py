@@ -344,7 +344,7 @@ if __name__ == '__main__':
 
     if origins['s3'].origin_path_prefix.startswith('/'):
       origin_path_prefix = origins['s3'].origin_path_prefix.replace('/', '', 1)
-     
+    
     if origins['s3'].find_copy(target_prefix='_dash-update-component/'):
       behaviors.append(CloudFrontBehavior(
         origin='s3',
@@ -447,11 +447,11 @@ if __name__ == '__main__':
   if 'OPEN_DASH_DATA_PATH' in os.environ:
     copy_directory_contents(
       os.environ['OPEN_DASH_DATA_PATH'],
-      os.path.join(origin_path_prefix, 'data') if origin_path_prefix else 'data',
+      os.path.join(static_path, '..', 'data'),
       []
     )
 
-    additional_bundles['data_path'] = MiscBundle(
+    additional_bundles['dataPath'] = MiscBundle(
       bundle=os.path.join('.open-dash', 'data'),
     )
   

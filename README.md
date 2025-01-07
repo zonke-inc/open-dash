@@ -39,6 +39,8 @@ Create an `open-dash.config.json` file in the root of your project. The configur
     "data-path": "path/to/data", // Optional - The path to the data directory.
     "venv-path": "path/to/venv", // Optional - The path to the virtual environment. If not provided, the system Python interpreter is used.
     "excluded-directories": ["__pycache__", ".git"], // Optional - Directories to exclude from the output bundle.
+    "domain-name": "example.com", // Optional - The domain name of the deployed application.
+    "target-base-path": "path/to/target", // Optional - The path to the target directory. If not provided, the source path's parent folder is used.
     "source-path": "path/to/source", // Optional - The path to the source directory. If not provided, the current working directory is used.
     "fingerprint": {
         "version": true, // Whether to include the system package version in the fingerprint.
@@ -53,7 +55,8 @@ If you do not provide a configuration file, OpenDash will use the default config
 {
     "warmer": true,
     "source-path": ".",
-    "export-static": false,
+    "export-static": true,
+    "target-base-path": "..",
     "excluded-directories": [],
     "fingerprint": {
         "version": true,

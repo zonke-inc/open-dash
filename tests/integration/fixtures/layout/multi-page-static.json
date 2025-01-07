@@ -1,0 +1,32 @@
+{
+  "included": [
+    ".open-dash/open-dash.output.json",
+
+    ".open-dash/server-functions/default/data",
+    ".open-dash/server-functions/default/app.py",
+    ".open-dash/server-functions/default/index.py",
+    ".open-dash/server-functions/default/Dockerfile",
+    ".open-dash/server-functions/default/pages/home.py",
+    ".open-dash/server-functions/default/pages/about.py",
+    ".open-dash/server-functions/default/requirements.txt",
+
+    ".open-dash/data",
+
+    ".open-dash/static/index.html",
+    ".open-dash/static/_dash-layout",
+    ".open-dash/static/_dash-dependencies",
+    ".open-dash/static/_dash-update-component/404",
+    ".open-dash/static/_dash-update-component/index",
+    ".open-dash/static/_dash-update-component/about",
+
+    ".open-dash/static/_dash-component-suites/dash/dcc",
+    ".open-dash/static/_dash-component-suites/dash/deps",
+    ".open-dash/static/_dash-component-suites/dash/html",
+    ".open-dash/static/_dash-component-suites/dash/dash_table",
+    ".open-dash/static/_dash-component-suites/dash/dash-renderer",
+    ".open-dash/static/_dash-component-suites/dash_bootstrap_components"
+  ],
+  "excluded": [
+    ".open-dash/warmer-function"
+  ]
+}

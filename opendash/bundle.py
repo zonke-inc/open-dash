@@ -29,12 +29,10 @@ def add_dependencies_to_requirements(requirements_path: str, dependencies: list[
 def prepare_folders(config: Config) -> dict[str, str]:
   script_path = os.path.dirname(os.path.realpath(__file__))
 
-  # Create .open-dash directory alongside source directory
-  source_parent = os.path.abspath(os.path.join(config.source_path, os.pardir))
-  open_dash_path = os.path.join(source_parent, '.open-dash')
+  open_dash_path = os.path.join(config.target_base_path, '.open-dash')
 
   if os.path.exists(open_dash_path):
-    print(f'.open-dash directory already exists in {source_parent}. Removing...')
+    print(f'.open-dash directory already exists in {config.target_base_path}. Removing...')
     shutil.rmtree(open_dash_path)
 
   # Create static, warmer-function, and server-functions/default directories inside .open-dash
@@ -51,27 +49,25 @@ def prepare_folders(config: Config) -> dict[str, str]:
     warmer_function_path = os.path.join(open_dash_path, 'warmer-function')
     os.makedirs(warmer_function_path, exist_ok=True)
   
-  data_path = os.path.join(open_dash_path, 'data')
-  if config.data_path and os.path.exists(config.data_path):
-    os.makedirs(data_path, exist_ok=True)
+  source_data_path = None
+  if config.data_path and os.path.exists(os.path.join(config.source_path, '..', config.data_path)):
+    source_data_path = os.path.join(config.source_path, '..', config.data_path)
+    os.makedirs(os.path.join(open_dash_path, 'data'), exist_ok=True)
 
   return {
-    'data_path': data_path,
     'script_path': script_path,
     'static_path': static_path,
     'open_dash_path': open_dash_path,
     'source_path': config.source_path,
+    'data_path': source_data_path or '',
     'warmer_function_path': warmer_function_path,
     'server_functions_path': server_functions_path,
   }
-
 
 def create(config: Config) -> None:
   print(f'Preparing dash bundle from {config.source_path}...')
 
   paths = prepare_folders(config)
-  if not paths:
-    return
   
   # Decostruct the prepare_folders_result dictionary
   if config.include_warmer:
