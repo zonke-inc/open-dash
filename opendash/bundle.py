@@ -64,6 +64,74 @@ def prepare_folders(config: Config) -> dict[str, str]:
     'server_functions_path': server_functions_path,
   }
 
+
+def install_dependencies(config: Config, paths: dict[str, str]) -> None:
+  # aws-wsgi is used by the lambda handler to serve the Dash app.
+  add_dependencies_to_requirements(
+    os.path.join(paths['server_functions_path'], 'requirements.txt'),
+    ['aws-wsgi>=0.2.7'],
+  )
+
+  pip_path = 'pip3'
+  if config.virtualenv_path:
+    pip_path = os.path.join(config.virtualenv_path, 'bin', 'pip3')
+
+  requirements_path = os.path.join(paths['server_functions_path'], 'requirements.txt')
+  result = subprocess.run(
+    [pip_path, '--disable-pip-version-check', 'install', '--no-cache', '-r', requirements_path],
+    text=True,
+    env=os.environ,
+    capture_output=True,
+  )
+  print(result.stdout)
+  if result.returncode != 0:
+    print(result.stderr)
+    sys.exit(1)
+
+
+def bundle_react_assets(config: Config, paths: dict[str, str]) -> None:
+  os.environ['OPEN_DASH_DOMAIN_NAME'] = config.domain_name
+  os.environ['OPEN_DASH_STATIC_PATH'] = paths['static_path']
+  os.environ['OPEN_DASH_FINGERPRINT_METHOD'] = config.fingerprint.method.value
+  os.environ['OPEN_DASH_EXPORT_STATIC'] = '1' if config.export_static else '0'
+  os.environ['OPEN_DASH_SERVER_FUNCTIONS_PATH'] = paths['server_functions_path']
+  os.environ['OPEN_DASH_INCLUDE_FINGERPRINT_VERSION'] = '1' if config.fingerprint.include_version else '0'
+  if config.include_warmer:
+    os.environ['OPEN_DASH_WARMER_FUNCTION_PATH'] = paths['warmer_function_path']
+  
+  if config.data_path:
+    os.environ['OPEN_DASH_SOURCE_DATA_PATH'] = paths['data_path']
+  
+  if os.path.exists(os.path.join(config.source_path, 'assets')):
+    os.environ['OPEN_DASH_ASSETS_PATH'] = os.path.join(config.source_path, 'assets')
+
+  python_path = 'python3'
+  if config.virtualenv_path:
+    python_path = os.path.join(config.virtualenv_path, 'bin', 'python3')
+  
+  assets_bundler_path = os.path.join(paths['server_functions_path'], 'assets_bundler.py')
+  result = subprocess.run(
+    [python_path, assets_bundler_path],
+    text=True,
+    env=os.environ,
+    capture_output=True,
+    cwd=paths['server_functions_path'],
+  )
+  print(result.stdout)
+  if result.returncode != 0:
+    print(result.stderr)
+    sys.exit(1)
+
+
+def clean_env_vars() -> None:
+  env_vars = []
+  for key in os.environ:
+    if key.startswith('OPEN_DASH_'):
+      env_vars.append(key)
+  
+  for key in env_vars:
+    del os.environ[key]
+
 def create(config: Config) -> None:
   print(f'Preparing dash bundle from {config.source_path}...')
 
@@ -84,62 +152,17 @@ def create(config: Config) -> None:
     os.path.join(paths['server_functions_path'], 'Dockerfile'),
   )
 
-  # aws-wsgi is used by the lambda handler to serve the Dash app.
-  add_dependencies_to_requirements(
-    os.path.join(paths['server_functions_path'], 'requirements.txt'),
-    ['aws-wsgi>=0.2.7'],
-  )
+  try:
+    print('Installing app dependencies...')
+    install_dependencies(config, paths)
 
-  print('Installing app dependencies...')
-  pip_path = 'pip3'
-  python_path = 'python3'
-  if config.virtualenv_path:
-    pip_path = os.path.join(config.virtualenv_path, 'bin', 'pip3')
-    python_path = os.path.join(config.virtualenv_path, 'bin', 'python3')
-
-  requirements_path = os.path.join(paths['server_functions_path'], 'requirements.txt')
-  result = subprocess.run(
-    [pip_path, '--disable-pip-version-check', 'install', '--no-cache', '-r', requirements_path],
-    text=True,
-    env=os.environ,
-    capture_output=True,
-  )
-  print(result.stdout)
-  if result.returncode != 0:
-    print(result.stderr)
-    sys.exit(1)
-
-  print('Bundling React assets...')
-  assets_bundler_path = os.path.join(paths['server_functions_path'], 'assets_bundler.py')
-  os.environ['OPEN_DASH_DOMAIN_NAME'] = config.domain_name
-  os.environ['OPEN_DASH_STATIC_PATH'] = paths['static_path']
-  os.environ['OPEN_DASH_FINGERPRINT_METHOD'] = config.fingerprint.method.value
-  os.environ['OPEN_DASH_EXPORT_STATIC'] = '1' if config.export_static else '0'
-  os.environ['OPEN_DASH_SERVER_FUNCTIONS_PATH'] = paths['server_functions_path']
-  os.environ['OPEN_DASH_INCLUDE_FINGERPRINT_VERSION'] = '1' if config.fingerprint.include_version else '0'
-  if config.include_warmer:
-    os.environ['OPEN_DASH_WARMER_FUNCTION_PATH'] = paths['warmer_function_path']
-  
-  if config.data_path:
-    os.environ['OPEN_DASH_DATA_PATH'] = paths['data_path']
-  
-  if os.path.exists(os.path.join(config.source_path, 'assets')):
-    os.environ['OPEN_DASH_ASSETS_PATH'] = os.path.join(config.source_path, 'assets')
-  
-  result = subprocess.run(
-    [python_path, assets_bundler_path],
-    text=True,
-    env=os.environ,
-    capture_output=True,
-    cwd=paths['server_functions_path'],
-  )
-  print(result.stdout)
-  if result.returncode != 0:
-    print(result.stderr)
-    sys.exit(1)
+    print('Bundling React assets...')
+    bundle_react_assets(config, paths)
+  finally:
+    clean_env_vars()
   
   print('Cleaning up...')
-  os.remove(assets_bundler_path)
+  os.remove(os.path.join(paths['server_functions_path'], 'assets_bundler.py'))
   os.remove(os.path.join(paths['server_functions_path'], 'open_dash_output.py'))
   for file in glob.glob(os.path.join(paths['open_dash_path'], '**', '*.pyc'), recursive=True):
     os.remove(file)

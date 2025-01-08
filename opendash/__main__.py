@@ -20,15 +20,6 @@ bundle_parser.add_argument(
   help='Path to the open-dash.config.json configuration file.'
 )
 
-def clean_env_vars() -> None:
-  env_vars = []
-  for key in os.environ:
-    if key.startswith('OPEN_DASH_'):
-      env_vars.append(key)
-  
-  for key in env_vars:
-    del os.environ[key]
-
 
 def main():
   args = parser.parse_args()
@@ -44,10 +35,7 @@ def main():
       print(f'Error: Source directory {config.source_path} does not contain a requirements.txt file.')
       sys.exit(1)
     
-    try:
-      bundle.create(config)
-    finally:
-      clean_env_vars()
+    bundle.create(config)
 
     print('Bundle complete.')
   
